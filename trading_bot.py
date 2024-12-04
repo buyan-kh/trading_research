@@ -16,6 +16,7 @@ def identify_all_points(df, window=5):
     df['swing_low'] = False
     df['between_high'] = False
     df['between_low'] = False
+    df['lower_high'] = False  # Add this for tracking lower highs
     
     # First identify swing points
     for i in range(window, len(df) - window):
@@ -35,6 +36,7 @@ def identify_all_points(df, window=5):
         if (current_low < left_bars['Low'].min() and 
             current_low < right_bars['Low'].min()):
             df.loc[df.index[i], 'swing_low'] = True
+            df.loc[df.index[i], 'lower_high'] = True  # Mark as lower high
     
     # Now identify between points
     for i in range(window, len(df) - window):
@@ -64,82 +66,49 @@ def price_to_pips(price_diff):
     """Convert price difference to pips"""
     return round(price_diff * 10000)
 
-def analyze_between_points(df):
-    """Analyze pip differences between points and add annotations"""
-    # Get between points with their prices
-    between_highs = df[df['between_high']][['High']]
-    between_lows = df[df['between_low']][['Low']]
+def identify_trade_signals(df):
+    """Identify long trade signals based on previous lower high"""
+    trade_signals = []
     
-    # Store annotations for plotting
-    annotations = []
-    high_diffs = []
-    low_diffs = []
+    for i in range(1, len(df)):
+        # Check if the current price breaks above the previous lower high
+        if df['lower_high'].iloc[i] and df['lower_high'].iloc[i-1] == False:
+            entry_price = df['High'].iloc[i]  # Entry at the break of the lower high
+            previous_low = df['Low'].iloc[i-1]  # Previous low
+            
+            # Calculate take profit
+            take_profit = entry_price + (entry_price - previous_low) * 2
+            
+            trade_signals.append({
+                'entry_date': df.index[i],
+                'entry_price': entry_price,
+                'take_profit': take_profit
+            })
     
-    # Calculate pip differences for between highs
-    for i in range(1, len(between_highs)):
-        current_price = between_highs['High'].iloc[i]
-        prev_price = between_highs['High'].iloc[i-1]
-        price_diff = abs(current_price - prev_price)
-        pips = price_to_pips(price_diff)
-        
-        high_diffs.append({
-            'start_date': between_highs.index[i-1],
-            'end_date': between_highs.index[i],
-            'pips': pips
-        })
-        
-        # Create annotation for chart
-        mid_point = between_highs.index[i-1] + (between_highs.index[i] - between_highs.index[i-1])/2
-        annotations.append(dict(
-            x=mid_point,
-            y=max(current_price, prev_price),
-            text=f"{pips}p",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=2,
-            arrowcolor='orange',
-            font=dict(size=10, color='orange'),
-            ax=0,
-            ay=-40
-        ))
-    
-    # Calculate pip differences for between lows
-    for i in range(1, len(between_lows)):
-        current_price = between_lows['Low'].iloc[i]
-        prev_price = between_lows['Low'].iloc[i-1]
-        price_diff = abs(current_price - prev_price)
-        pips = price_to_pips(price_diff)
-        
-        low_diffs.append({
-            'start_date': between_lows.index[i-1],
-            'end_date': between_lows.index[i],
-            'pips': pips
-        })
-        
-        # Create annotation for chart
-        mid_point = between_lows.index[i-1] + (between_lows.index[i] - between_lows.index[i-1])/2
-        annotations.append(dict(
-            x=mid_point,
-            y=min(current_price, prev_price),
-            text=f"{pips}p",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=2,
-            arrowcolor='blue',
-            font=dict(size=10, color='blue'),
-            ax=0,
-            ay=40
-        ))
-    
-    return annotations, high_diffs, low_diffs
+    return trade_signals
 
-def plot_chart(df):
-    """Create an interactive plot with all points and pip differences"""
-    # Get annotations for pip differences
-    annotations, high_diffs, low_diffs = analyze_between_points(df)
+def backtest_trades(df, trade_signals):
+    """Backtest the identified trades and calculate results"""
+    results = []
     
+    for signal in trade_signals:
+        # Check if the take profit is hit in the future
+        for j in range(df.index.get_loc(signal['entry_date']), len(df)):
+            if df['High'].iloc[j] >= signal['take_profit']:
+                results.append({
+                    'entry_date': signal['entry_date'],
+                    'entry_price': signal['entry_price'],
+                    'take_profit': signal['take_profit'],
+                    'exit_date': df.index[j],
+                    'exit_price': signal['take_profit'],
+                    'profit': signal['take_profit'] - signal['entry_price']
+                })
+                break  # Exit the loop once the take profit is hit
+    
+    return results
+
+def plot_chart_with_trades(df, trade_signals, results):
+    """Create an interactive plot with trade signals and results"""
     fig = go.Figure(data=[go.Candlestick(x=df.index,
                 open=df['Open'],
                 high=df['High'],
@@ -167,30 +136,32 @@ def plot_chart(df):
         name='Swing Lows'
     )
     
-    # Add between highs (orange)
-    between_highs = df[df['between_high']]
-    fig.add_scatter(
-        x=between_highs.index,
-        y=between_highs['High'],
-        mode='markers',
-        marker=dict(symbol='triangle-down', size=8, color='orange'),
-        name='Between Highs'
-    )
-    
-    # Add between lows (blue)
-    between_lows = df[df['between_low']]
-    fig.add_scatter(
-        x=between_lows.index,
-        y=between_lows['Low'],
-        mode='markers',
-        marker=dict(symbol='triangle-up', size=8, color='blue'),
-        name='Between Lows'
-    )
+    # Add trade signals
+    for signal in trade_signals:
+        fig.add_trace(go.Scatter(
+            x=[signal['entry_date'], signal['entry_date']],
+            y=[signal['entry_price'], signal['take_profit']],
+            mode='lines+text',
+            line=dict(color='purple', width=2, dash='dash'),
+            name='Trade Entry',
+            text=[f"Entry: {signal['entry_price']:.4f}", f"TP: {signal['take_profit']:.4f}"],
+            textposition="top right"
+        ))
 
-    # Add pip difference annotations
+    # Add results to the chart
+    for result in results:
+        fig.add_trace(go.Scatter(
+            x=[result['entry_date'], result['exit_date']],
+            y=[result['entry_price'], result['exit_price']],
+            mode='lines+text',
+            line=dict(color='green', width=2),
+            name='Trade Result',
+            text=[f"Profit: {result['profit']:.4f}"],
+            textposition="top right"
+        ))
+
     fig.update_layout(
-        annotations=annotations,
-        title='GBP/USD Price Action with Pip Differences',
+        title='GBP/USD Price Action with Trade Signals',
         yaxis_title='Price (USD)',
         xaxis_title='Date',
         template='plotly_dark'
@@ -202,7 +173,24 @@ def main():
     print("Fetching GBP/USD data...")
     df = get_gbpusd_data()
     df = identify_all_points(df)
-    plot_chart(df)
+    
+    # Identify trade signals
+    trade_signals = identify_trade_signals(df)
+    
+    # Backtest the trades
+    results = backtest_trades(df, trade_signals)
+    
+    # Plot the chart with trade signals and results
+    plot_chart_with_trades(df, trade_signals, results)
+
+    # Print backtest results
+    print("\nBacktest Results:")
+    print("-----------------")
+    print(f"Total Trades: {len(results)}")
+    total_profit = sum(result['profit'] for result in results)
+    print(f"Total Profit: {total_profit:.4f} USD")
+    win_rate = (len(results) / len(trade_signals)) * 100 if trade_signals else 0
+    print(f"Win Rate: {win_rate:.2f}%")
 
 if __name__ == "__main__":
     main() 
