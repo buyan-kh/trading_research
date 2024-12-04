@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 from backtest import identify_trade_signals, backtest_trades, plot_chart_with_trades
 
-def get_gbpusd_data(period="1mo", interval="1h"):
+def get_gbpusd_data(period="1y", interval="1h"):
     """Get GBP/USD historical data from Yahoo Finance"""
     ticker = yf.Ticker("GBPUSD=X")
     df = ticker.history(period=period, interval=interval)
@@ -62,15 +62,15 @@ def identify_all_points(df, window=5):
     return df
 
 def main():
-    print("Fetching GBP/USD data...")
+    print("Fetching GBP/USD data for the last year at 1-hour intervals...")
     df = get_gbpusd_data()
     df = identify_all_points(df)
     
     # Identify trade signals
     trade_signals = identify_trade_signals(df)
     
-    # Backtest the trades
-    results = backtest_trades(df, trade_signals)
+    # Backtest the trades with an initial balance of $10,000 and lot size of 1
+    results = backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1)
     
     # Plot the chart with trade signals and results
     plot_chart_with_trades(df, trade_signals, results)

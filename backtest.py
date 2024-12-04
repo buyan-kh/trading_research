@@ -22,21 +22,27 @@ def identify_trade_signals(df):
     
     return trade_signals
 
-def backtest_trades(df, trade_signals):
+def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     """Backtest the identified trades and calculate results"""
     results = []
+    balance = initial_balance
     
     for signal in trade_signals:
         # Check if the take profit is hit in the future
         for j in range(df.index.get_loc(signal['entry_date']), len(df)):
             if df['High'].iloc[j] >= signal['take_profit']:
+                exit_price = signal['take_profit']
+                profit = (exit_price - signal['entry_price']) * lot_size  # Profit calculation
+                balance += profit  # Update balance
+                
                 results.append({
                     'entry_date': signal['entry_date'],
                     'entry_price': signal['entry_price'],
                     'take_profit': signal['take_profit'],
                     'exit_date': df.index[j],
-                    'exit_price': signal['take_profit'],
-                    'profit': signal['take_profit'] - signal['entry_price']
+                    'exit_price': exit_price,
+                    'profit': profit,
+                    'balance': balance  # Track balance after the trade
                 })
                 break  # Exit the loop once the take profit is hit
     
