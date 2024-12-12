@@ -23,28 +23,81 @@ def identify_trade_signals(df):
     return trade_signals
 
 def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
-    """Backtest the identified trades and calculate results"""
+    """
+    Backtest trading strategy with enhanced win percentage tracking
+    
+    Parameters:
+    - df: DataFrame with price data
+    - trade_signals: List of trade signals
+    - initial_balance: Starting account balance
+    - lot_size: Size of each trade
+    
+    Returns:
+    - Detailed results including win/loss percentages
+    """
     results = []
-    balance = initial_balance
+    current_balance = initial_balance
+    
+    # Tracking variables for win/loss analysis
+    total_trades = 0
+    winning_trades = 0
+    losing_trades = 0
+    
+    # Profit/loss tracking
+    total_profit = 0
+    max_profit = float('-inf')
+    max_loss = float('inf')
     
     for signal in trade_signals:
-        # Check if the take profit is hit in the future
-        for j in range(df.index.get_loc(signal['entry_date']), len(df)):
-            if df['High'].iloc[j] >= signal['take_profit']:
-                exit_price = signal['take_profit']
-                profit = (exit_price - signal['entry_price']) * lot_size  # Profit calculation
-                balance += profit  # Update balance
-                
-                results.append({
-                    'entry_date': signal['entry_date'],
-                    'entry_price': signal['entry_price'],
-                    'take_profit': signal['take_profit'],
-                    'exit_date': df.index[j],
-                    'exit_price': exit_price,
-                    'profit': profit,
-                    'balance': balance  # Track balance after the trade
-                })
-                break  # Exit the loop once the take profit is hit
+        total_trades += 1
+        
+        # Simulate trade execution
+        entry_price = signal['entry_price']
+        stop_loss = signal['stop_loss']
+        take_profit = signal['take_profit']
+        trade_type = signal['type']
+        
+        # Calculate potential profit/loss
+        if trade_type == 'long':
+            trade_result = take_profit - entry_price
+        else:  # short
+            trade_result = entry_price - take_profit
+        
+        # Determine trade outcome
+        if trade_result > 0:
+            winning_trades += 1
+            profit = abs(trade_result) * lot_size
+            current_balance += profit
+            total_profit += profit
+            max_profit = max(max_profit, profit)
+        else:
+            losing_trades += 1
+            loss = abs(trade_result) * lot_size
+            current_balance -= loss
+            total_profit -= loss
+            max_loss = min(max_loss, loss)
+        
+        # Store trade result
+        results.append({
+            'type': trade_type,
+            'entry_price': entry_price,
+            'profit': trade_result * lot_size,
+            'is_winning_trade': trade_result > 0
+        })
+    
+    # Calculate percentages
+    win_percentage = (winning_trades / total_trades) * 100 if total_trades > 0 else 0
+    loss_percentage = (losing_trades / total_trades) * 100 if total_trades > 0 else 0
+    
+    # Print detailed trade analysis
+    print("\nTrade Analysis:")
+    print(f"Total Trades: {total_trades}")
+    print(f"Winning Trades: {winning_trades} ({win_percentage:.2f}%)")
+    print(f"Losing Trades: {losing_trades} ({loss_percentage:.2f}%)")
+    print(f"Total Profit: ${total_profit:.2f}")
+    print(f"Max Single Trade Profit: ${max_profit:.2f}")
+    print(f"Max Single Trade Loss: ${max_loss:.2f}")
+    print(f"Final Account Balance: ${current_balance:.2f}")
     
     return results
 
