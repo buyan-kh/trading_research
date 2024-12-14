@@ -14,10 +14,14 @@ def identify_trade_signals(df):
             # Calculate take profit
             take_profit = entry_price + (entry_price - previous_low) * 2
             
+            # Calculate stop loss (e.g., 1% below entry price)
+            stop_loss = entry_price * 0.99
+            
             trade_signals.append({
                 'entry_date': df.index[i],
                 'entry_price': entry_price,
-                'take_profit': take_profit
+                'take_profit': take_profit,
+                'stop_loss': stop_loss
             })
     
     return trade_signals
@@ -25,15 +29,6 @@ def identify_trade_signals(df):
 def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     """
     Backtest trading strategy with enhanced win percentage tracking
-    
-    Parameters:
-    - df: DataFrame with price data
-    - trade_signals: List of trade signals
-    - initial_balance: Starting account balance
-    - lot_size: Size of each trade
-    
-    Returns:
-    - Detailed results including win/loss percentages
     """
     results = []
     current_balance = initial_balance
@@ -45,44 +40,41 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     
     # Profit/loss tracking
     total_profit = 0
-    max_profit = float('-inf')
-    max_loss = float('inf')
     
     for signal in trade_signals:
         total_trades += 1
         
         # Simulate trade execution
         entry_price = signal['entry_price']
-        stop_loss = signal['stop_loss']
         take_profit = signal['take_profit']
-        trade_type = signal['type']
+        stop_loss = signal['stop_loss']
         
-        # Calculate potential profit/loss
-        if trade_type == 'long':
-            trade_result = take_profit - entry_price
-        else:  # short
-            trade_result = entry_price - take_profit
+        # Simulate price movement to determine trade outcome
+        exit_price = None
+        for j in range(df.index.get_loc(signal['entry_date']), len(df)):
+            if df['Low'].iloc[j] <= stop_loss:
+                exit_price = stop_loss
+                losing_trades += 1
+                break
+            elif df['High'].iloc[j] >= take_profit:
+                exit_price = take_profit
+                winning_trades += 1
+                break
         
-        # Determine trade outcome
-        if trade_result > 0:
-            winning_trades += 1
-            profit = abs(trade_result) * lot_size
-            current_balance += profit
-            total_profit += profit
-            max_profit = max(max_profit, profit)
-        else:
-            losing_trades += 1
-            loss = abs(trade_result) * lot_size
-            current_balance -= loss
-            total_profit -= loss
-            max_loss = min(max_loss, loss)
+        if exit_price is None:  # If neither stop loss nor take profit was hit
+            exit_price = df['Close'].iloc[-1]  # Close at the last price
+        
+        profit = (exit_price - entry_price) * lot_size
+        current_balance += profit
+        total_profit += profit
         
         # Store trade result
         results.append({
-            'type': trade_type,
+            'entry_date': signal['entry_date'],
             'entry_price': entry_price,
-            'profit': trade_result * lot_size,
-            'is_winning_trade': trade_result > 0
+            'exit_price': exit_price,
+            'profit': profit,
+            'is_winning_trade': profit > 0
         })
     
     # Calculate percentages
@@ -95,8 +87,6 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     print(f"Winning Trades: {winning_trades} ({win_percentage:.2f}%)")
     print(f"Losing Trades: {losing_trades} ({loss_percentage:.2f}%)")
     print(f"Total Profit: ${total_profit:.2f}")
-    print(f"Max Single Trade Profit: ${max_profit:.2f}")
-    print(f"Max Single Trade Loss: ${max_loss:.2f}")
     print(f"Final Account Balance: ${current_balance:.2f}")
     
     return results
@@ -110,26 +100,6 @@ def plot_chart_with_trades(df, trade_signals, results):
                 close=df['Close'],
                 name='GBP/USD')])
 
-    # Add swing highs (red)
-    swing_highs = df[df['swing_high']]
-    fig.add_scatter(
-        x=swing_highs.index,
-        y=swing_highs['High'],
-        mode='markers',
-        marker=dict(symbol='triangle-down', size=10, color='red'),
-        name='Swing Highs'
-    )
-    
-    # Add swing lows (green)
-    swing_lows = df[df['swing_low']]
-    fig.add_scatter(
-        x=swing_lows.index,
-        y=swing_lows['Low'],
-        mode='markers',
-        marker=dict(symbol='triangle-up', size=10, color='green'),
-        name='Swing Lows'
-    )
-    
     # Add trade signals
     for signal in trade_signals:
         fig.add_trace(go.Scatter(
@@ -148,7 +118,7 @@ def plot_chart_with_trades(df, trade_signals, results):
             x=[result['entry_date'], result['exit_date']],
             y=[result['entry_price'], result['exit_price']],
             mode='lines+text',
-            line=dict(color='green', width=2),
+            line=dict(color='green' if result['is_winning_trade'] else 'red', width=2),
             name='Trade Result',
             text=[f"Profit: {result['profit']:.4f}"],
             textposition="top right"
