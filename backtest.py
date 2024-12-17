@@ -91,14 +91,58 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     
     return results
 
+def calculate_fibonacci_levels(df, period=50):
+    """Calculate Fibonacci retracement levels based on the highest and lowest prices over a specified period."""
+    if len(df) < period:
+        raise ValueError("DataFrame must have at least 'period' rows.")
+    
+    # Calculate the highest and lowest prices over the specified period
+    highest_price = df['High'].rolling(window=period).max()
+    lowest_price = df['Low'].rolling(window=period).min()
+    
+    # Calculate Fibonacci levels
+    fibonacci_0 = highest_price
+    fibonacci_1 = highest_price - (highest_price - lowest_price) * 0.236  # 23.6% level
+    fibonacci_2 = highest_price - (highest_price - lowest_price) * 0.618  # 61.8% level
+    
+    # Add Fibonacci levels to the DataFrame
+    df['Fibonacci_0'] = fibonacci_0
+    df['Fibonacci_1'] = fibonacci_1
+    df['Fibonacci_2'] = fibonacci_2
+    
+    return df
+
 def plot_chart_with_trades(df, trade_signals, results):
-    """Create an interactive plot with trade signals and results"""
+    """Create an interactive plot with trade signals and results, including Fibonacci levels."""
     fig = go.Figure(data=[go.Candlestick(x=df.index,
                 open=df['Open'],
                 high=df['High'],
                 low=df['Low'],
                 close=df['Close'],
                 name='GBP/USD')])
+
+    # Add Fibonacci levels
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df['Fibonacci_0'],
+        mode='lines',
+        line=dict(color='blue', width=1, dash='dash'),
+        name='Fibonacci Level 0'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df['Fibonacci_1'],
+        mode='lines',
+        line=dict(color='orange', width=1, dash='dash'),
+        name='Fibonacci Level 1 (23.6%)'
+    ))
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df['Fibonacci_2'],
+        mode='lines',
+        line=dict(color='red', width=1, dash='dash'),
+        name='Fibonacci Level 2 (61.8%)'
+    ))
 
     # Add trade signals
     for signal in trade_signals:
@@ -125,10 +169,30 @@ def plot_chart_with_trades(df, trade_signals, results):
         ))
 
     fig.update_layout(
-        title='GBP/USD Price Action with Trade Signals',
+        title='GBP/USD Price Action with Trade Signals and Fibonacci Levels',
         yaxis_title='Price (USD)',
         xaxis_title='Date',
         template='plotly_dark'
     )
 
     fig.show()
+
+def main():
+    print("Fetching GBP/USD data for the last year at 1-hour intervals...")
+    df = get_gbpusd_data()
+    df = identify_all_points(df)
+    
+    # Calculate Fibonacci levels
+    df = calculate_fibonacci_levels(df, period=50)
+    
+    # Identify trade signals
+    trade_signals = identify_trade_signals(df)
+    
+    # Backtest the trades with an initial balance of $10,000 and lot size of 1
+    results = backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1)
+    
+    # Plot the chart with trade signals and results
+    plot_chart_with_trades(df, trade_signals, results)
+
+if __name__ == "__main__":
+    main()
