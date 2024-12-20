@@ -52,18 +52,22 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
         
         # Simulate price movement to determine trade outcome
         exit_price = None
+        exit_date = None
         for j in range(df.index.get_loc(signal['entry_date']), len(df)):
             if df['Low'].iloc[j] <= stop_loss:
                 exit_price = stop_loss
+                exit_date = df.index[j]
                 losing_trades += 1
                 break
             elif df['High'].iloc[j] >= take_profit:
                 exit_price = take_profit
+                exit_date = df.index[j]
                 winning_trades += 1
                 break
         
         if exit_price is None:  # If neither stop loss nor take profit was hit
             exit_price = df['Close'].iloc[-1]  # Close at the last price
+            exit_date = df.index[-1]
         
         profit = (exit_price - entry_price) * lot_size
         current_balance += profit
@@ -74,6 +78,7 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
             'entry_date': signal['entry_date'],
             'entry_price': entry_price,
             'exit_price': exit_price,
+            'exit_date': exit_date,
             'profit': profit,
             'is_winning_trade': profit > 0
         })
