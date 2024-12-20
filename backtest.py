@@ -112,8 +112,34 @@ def calculate_fibonacci_levels(df, period=50):
     
     return df
 
-def plot_chart_with_trades(df, trade_signals, results):
-    """Create an interactive plot with trade signals and results, including Fibonacci levels."""
+def count_cycles(df, interval='4H'):
+    """Count cycles based on the specified interval (4H or D)"""
+    df['Cycle'] = (df.index.to_series().diff() > pd.Timedelta(interval)).cumsum()
+    cycle_counts = df['Cycle'].value_counts().sort_index()
+    return cycle_counts
+
+def analyze_retracements(df):
+    """Analyze retracements based on Fibonacci levels"""
+    retracement_analysis = []
+    
+    for i in range(1, len(df)):
+        if df['Close'].iloc[i] < df['Fibonacci_0'].iloc[i] and df['Close'].iloc[i] > df['Fibonacci_1'].iloc[i]:
+            retracement_analysis.append({
+                'date': df.index[i],
+                'retracement_level': '23.6%',
+                'price': df['Close'].iloc[i]
+            })
+        elif df['Close'].iloc[i] < df['Fibonacci_1'].iloc[i] and df['Close'].iloc[i] > df['Fibonacci_2'].iloc[i]:
+            retracement_analysis.append({
+                'date': df.index[i],
+                'retracement_level': '61.8%',
+                'price': df['Close'].iloc[i]
+            })
+    
+    return retracement_analysis
+
+def plot_chart_with_trades(df, trade_signals, results, cycle_counts, retracement_analysis):
+    """Create an interactive plot with trade signals, results, Fibonacci levels, and retracement analysis."""
     fig = go.Figure(data=[go.Candlestick(x=df.index,
                 open=df['Open'],
                 high=df['High'],
@@ -168,8 +194,33 @@ def plot_chart_with_trades(df, trade_signals, results):
             textposition="top right"
         ))
 
+    # Add retracement analysis to the chart
+    for retracement in retracement_analysis:
+        fig.add_trace(go.Scatter(
+            x=[retracement['date']],
+            y=[retracement['price']],
+            mode='markers+text',
+            marker=dict(color='yellow', size=10),
+            name=f'Retracement {retracement["retracement_level"]}',
+            text=[f"Retracement: {retracement['retracement_level']}"],
+            textposition="top center"
+        ))
+
+    # Add cycle counts to the chart
+    for cycle, count in cycle_counts.items():
+        fig.add_annotation(
+            x=df.index[0] + pd.Timedelta(hours=cycle * 4),  # Adjust for cycle timing
+            y=df['High'].max(),
+            text=f'Cycle {cycle}: {count}',
+            showarrow=True,
+            arrowhead=2,
+            ax=0,
+            ay=-40,
+            bgcolor='lightblue'
+        )
+
     fig.update_layout(
-        title='GBP/USD Price Action with Trade Signals and Fibonacci Levels',
+        title='GBP/USD Price Action with Trade Signals, Fibonacci Levels, and Retracement Analysis',
         yaxis_title='Price (USD)',
         xaxis_title='Date',
         template='plotly_dark'
@@ -185,14 +236,21 @@ def main():
     # Calculate Fibonacci levels
     df = calculate_fibonacci_levels(df, period=50)
     
+    # Count cycles for 4H and daily intervals
+    cycle_counts_4h = count_cycles(df, interval='4H')
+    cycle_counts_daily = count_cycles(df, interval='D')
+    
+    # Analyze retracements
+    retracement_analysis = analyze_retracements(df)
+    
     # Identify trade signals
     trade_signals = identify_trade_signals(df)
     
     # Backtest the trades with an initial balance of $10,000 and lot size of 1
     results = backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1)
     
-    # Plot the chart with trade signals and results
-    plot_chart_with_trades(df, trade_signals, results)
+    # Plot the chart with trade signals, results, and analysis
+    plot_chart_with_trades(df, trade_signals, results, cycle_counts_4h, retracement_analysis)
 
 if __name__ == "__main__":
     main()
