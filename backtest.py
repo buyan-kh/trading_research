@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 
 def identify_trade_signals(df):
@@ -138,6 +139,16 @@ def analyze_retracements(df):
     
     return retracement_analysis
 
+def calculate_derivative(df):
+    """Calculate the derivative (rate of change) of the closing price."""
+    df['Price_Derivative'] = df['Close'].diff() / df.index.to_series().diff().dt.total_seconds()
+    return df
+
+def calculate_integral(df, period=50):
+    """Calculate the integral (cumulative sum) of the closing price over a specified period."""
+    df['Price_Integral'] = df['Close'].rolling(window=period).sum()
+    return df
+
 def plot_chart_with_trades(df, trade_signals, results, cycle_counts, retracement_analysis):
     """Create an interactive plot with trade signals, results, Fibonacci levels, and retracement analysis."""
     fig = go.Figure(data=[go.Candlestick(x=df.index,
@@ -242,6 +253,10 @@ def main():
     
     # Analyze retracements
     retracement_analysis = analyze_retracements(df)
+    
+    # Calculate derivatives and integrals
+    df = calculate_derivative(df)
+    df = calculate_integral(df, period=50)
     
     # Identify trade signals
     trade_signals = identify_trade_signals(df)
