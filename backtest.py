@@ -114,7 +114,11 @@ def calculate_fibonacci_levels(df, period=50):
     return df
 
 def count_cycles(df, interval='4H'):
-    """Count cycles based on the specified interval (4H or D)"""
+    """Count cycles based on the specified interval (4H or 1D)"""
+    # Ensure the interval string includes a number
+    if interval == 'D':
+        interval = '1D'
+    
     df['Cycle'] = (df.index.to_series().diff() > pd.Timedelta(interval)).cumsum()
     cycle_counts = df['Cycle'].value_counts().sort_index()
     return cycle_counts
