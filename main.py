@@ -10,6 +10,10 @@ from backtest import (
     backtest_trades,
     plot_chart_with_trades
 )
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import numpy as np
 
 def get_gbpusd_data(period="1y", interval="1h"):
     """Get GBP/USD historical data from Yahoo Finance"""
@@ -70,6 +74,48 @@ def identify_all_points(df, window=5):
 
     return df
 
+def train_random_forest(df):
+    # Feature engineering: create lag features
+    df['lag_1'] = df['Close'].shift(1)
+    df['lag_2'] = df['Close'].shift(2)
+    df.dropna(inplace=True)
+
+    # Define features and target
+    X = df[['lag_1', 'lag_2']]
+    y = df['Close']
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Train Random Forest model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+
+    # Predict and calculate loss
+    predictions = model.predict(X_test)
+    loss = mean_squared_error(y_test, predictions)
+
+    return model, loss
+
+def enter_trades_based_on_model(df, model, loss_threshold=0.0001):
+    # Check if the model's loss is below the threshold
+    _, loss = train_random_forest(df)
+    if loss < loss_threshold:
+        # Predict the next price
+        df['lag_1'] = df['Close'].shift(1)
+        df['lag_2'] = df['Close'].shift(2)
+        df.dropna(inplace=True)
+        next_price_prediction = model.predict(df[['lag_1', 'lag_2']].tail(1))
+
+        # Enter trade based on prediction
+        entry_price = df['Close'].iloc[-1]
+        if next_price_prediction > entry_price:
+            print("Enter Long Trade")
+        else:
+            print("Enter Short Trade")
+    else:
+        print("Model loss too high, no trade entered.")
+
 def main():
     print("Fetching GBP/USD data for the last year at 1-hour intervals...")
     df = get_gbpusd_data()
@@ -89,6 +135,13 @@ def main():
     df = calculate_derivative(df)
     df = calculate_integral(df, period=50)
     
+    # Train Random Forest model and evaluate
+    model, loss = train_random_forest(df)
+    print(f"Model Loss: {loss}")
+
+    # Enter trades based on model predictions
+    enter_trades_based_on_model(df, model)
+
     # Identify trade signals
     trade_signals = identify_trade_signals(df)
     
