@@ -11,7 +11,7 @@ from backtest import (
     plot_chart_with_trades
 )
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error
 import numpy as np
 
@@ -74,14 +74,19 @@ def identify_all_points(df, window=5):
 
     return df
 
-def train_random_forest(df):
-    # Feature engineering: create lag features
+def create_features(df):
     df['lag_1'] = df['Close'].shift(1)
     df['lag_2'] = df['Close'].shift(2)
+    df['moving_avg_3'] = df['Close'].rolling(window=3).mean()
+    df['volatility'] = df['Close'].rolling(window=5).std()
     df.dropna(inplace=True)
+    return df
 
+def train_random_forest(df):
+    df = create_features(df)
+    
     # Define features and target
-    X = df[['lag_1', 'lag_2']]
+    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'volatility']]
     y = df['Close']
 
     # Split data into training and testing sets
@@ -91,11 +96,15 @@ def train_random_forest(df):
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
 
+    # Cross-validation
+    cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_squared_error')
+    cv_loss = -np.mean(cv_scores)
+
     # Predict and calculate loss
     predictions = model.predict(X_test)
-    loss = mean_squared_error(y_test, predictions)
+    test_loss = mean_squared_error(y_test, predictions)
 
-    return model, loss
+    return model, cv_loss, test_loss
 
 def enter_trades_based_on_model(df, model, loss_threshold=0.0001):
     # Check if the model's loss is below the threshold
@@ -136,8 +145,9 @@ def main():
     df = calculate_integral(df, period=50)
     
     # Train Random Forest model and evaluate
-    model, loss = train_random_forest(df)
-    print(f"Model Loss: {loss}")
+    model, cv_loss, test_loss = train_random_forest(df)
+    print(f"Cross-Validation Loss: {cv_loss}")
+    print(f"Test Loss: {test_loss}")
 
     # Enter trades based on model predictions
     enter_trades_based_on_model(df, model)
