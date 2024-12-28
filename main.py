@@ -10,7 +10,8 @@ from backtest import (
     backtest_trades,
     plot_chart_with_trades
 )
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error
 import numpy as np
@@ -124,6 +125,38 @@ def enter_trades_based_on_model(df, model, loss_threshold=0.0001):
             print("Enter Short Trade")
     else:
         print("Model loss too high, no trade entered.")
+
+def train_ensemble_model(df):
+    df = create_features(df)
+    
+    # Define features and target
+    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'moving_avg_5', 'volatility', 'momentum']]
+    y = df['Close']
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Train individual models
+    rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+    gb_model = GradientBoostingRegressor(n_estimators=100, random_state=42)
+    lr_model = LinearRegression()
+
+    rf_model.fit(X_train, y_train)
+    gb_model.fit(X_train, y_train)
+    lr_model.fit(X_train, y_train)
+
+    # Ensemble predictions
+    rf_pred = rf_model.predict(X_test)
+    gb_pred = gb_model.predict(X_test)
+    lr_pred = lr_model.predict(X_test)
+
+    # Average predictions
+    ensemble_pred = (rf_pred + gb_pred + lr_pred) / 3
+
+    # Calculate loss
+    test_loss = mean_squared_error(y_test, ensemble_pred)
+
+    return ensemble_pred, test_loss
 
 def main():
     print("Fetching GBP/USD data for the last year at 1-hour intervals...")
