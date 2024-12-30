@@ -1,6 +1,10 @@
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from sklearn.preprocessing import MinMaxScaler
 
 def identify_trade_signals(df):
     """Identify long trade signals based on previous lower high"""
@@ -247,6 +251,33 @@ def plot_chart_with_trades(df, trade_signals, results, cycle_counts, retracement
     )
 
     fig.show()
+
+def create_neural_network(input_shape):
+    model = Sequential([
+        Dense(64, input_dim=input_shape, activation='relu'),
+        Dropout(0.2),
+        Dense(32, activation='relu'),
+        Dense(1)  # Output layer for regression
+    ])
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
+
+def enter_trades_based_on_nn(df, model, scaler, loss_threshold=0.0001):
+    df = create_features(df)
+    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'moving_avg_5', 'volatility', 'momentum']]
+    X_scaled = scaler.transform(X)
+
+    # Predict the next price
+    next_price_prediction = model.predict(X_scaled[-1].reshape(1, -1))
+
+    # Enter trade based on prediction
+    entry_price = df['Close'].iloc[-1]
+    if next_price_prediction > entry_price and test_loss < loss_threshold:
+        print("Enter Long Trade")
+    elif next_price_prediction < entry_price and test_loss < loss_threshold:
+        print("Enter Short Trade")
+    else:
+        print("Model loss too high or prediction not favorable, no trade entered.")
 
 def main():
     print("Fetching GBP/USD data for the last year at 1-hour intervals...")

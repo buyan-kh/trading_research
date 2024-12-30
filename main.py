@@ -15,6 +15,10 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import mean_squared_error
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from sklearn.preprocessing import MinMaxScaler
 
 def get_gbpusd_data(period="1y", interval="1h"):
     """Get GBP/USD historical data from Yahoo Finance"""
@@ -158,6 +162,57 @@ def train_ensemble_model(df):
 
     return ensemble_pred, test_loss
 
+def create_neural_network(input_shape):
+    model = Sequential([
+        Dense(64, input_dim=input_shape, activation='relu'),
+        Dropout(0.2),
+        Dense(32, activation='relu'),
+        Dense(1)  # Output layer for regression
+    ])
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
+
+def train_neural_network(df):
+    df = create_features(df)
+    
+    # Define features and target
+    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'moving_avg_5', 'volatility', 'momentum']]
+    y = df['Close']
+
+    # Scale features
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Split data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+    # Create and train the neural network
+    model = create_neural_network(X_train.shape[1])
+    model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, verbose=1)
+
+    # Evaluate the model
+    test_loss = model.evaluate(X_test, y_test, verbose=0)
+    print(f"Neural Network Test Loss: {test_loss}")
+
+    return model, scaler, test_loss
+
+def enter_trades_based_on_nn(df, model, scaler, loss_threshold=0.0001):
+    df = create_features(df)
+    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'moving_avg_5', 'volatility', 'momentum']]
+    X_scaled = scaler.transform(X)
+
+    # Predict the next price
+    next_price_prediction = model.predict(X_scaled[-1].reshape(1, -1))
+
+    # Enter trade based on prediction
+    entry_price = df['Close'].iloc[-1]
+    if next_price_prediction > entry_price and test_loss < loss_threshold:
+        print("Enter Long Trade")
+    elif next_price_prediction < entry_price and test_loss < loss_threshold:
+        print("Enter Short Trade")
+    else:
+        print("Model loss too high or prediction not favorable, no trade entered.")
+
 def main():
     print("Fetching GBP/USD data for the last year at 1-hour intervals...")
     df = get_gbpusd_data()
@@ -177,13 +232,12 @@ def main():
     df = calculate_derivative(df)
     df = calculate_integral(df, period=50)
     
-    # Train Random Forest model and evaluate
-    model, cv_loss, test_loss = train_random_forest(df)
-    print(f"Cross-Validation Loss: {cv_loss}")
-    print(f"Test Loss: {test_loss}")
+    # Train neural network model and evaluate
+    model, scaler, test_loss = train_neural_network(df)
+    print(f"Neural Network Test Loss: {test_loss}")
 
     # Enter trades based on model predictions
-    enter_trades_based_on_model(df, model)
+    enter_trades_based_on_nn(df, model, scaler)
 
     # Identify trade signals
     trade_signals = identify_trade_signals(df)
