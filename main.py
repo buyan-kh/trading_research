@@ -232,9 +232,9 @@ def main():
     df = calculate_derivative(df)
     df = calculate_integral(df, period=50)
     
-    # Train neural network model and evaluate
-    model, scaler, test_loss = train_neural_network(df)
-    print(f"Neural Network Test Loss: {test_loss}")
+    # Train enhanced neural network model and evaluate
+    model, scaler, test_loss = train_enhanced_neural_network(df)
+    print(f"Enhanced Neural Network Test Loss: {test_loss}")
 
     # Enter trades based on model predictions
     enter_trades_based_on_nn(df, model, scaler)
