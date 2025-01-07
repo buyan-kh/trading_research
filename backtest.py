@@ -3,8 +3,11 @@ import numpy as np
 import plotly.graph_objects as go
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization, LSTM
+from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+import talib
 
 def identify_trade_signals(df):
     """Identify long trade signals based on previous lower high"""
@@ -252,32 +255,44 @@ def plot_chart_with_trades(df, trade_signals, results, cycle_counts, retracement
 
     fig.show()
 
-def create_neural_network(input_shape):
-    model = Sequential([
-        Dense(64, input_dim=input_shape, activation='relu'),
-        Dropout(0.2),
-        Dense(32, activation='relu'),
-        Dense(1)  # Output layer for regression
-    ])
+def create_lstm_model(input_shape):
+    model = Sequential()
+    model.add(LSTM(units=50, return_sequences=True, input_shape=input_shape))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=50, return_sequences=False))
+    model.add(Dropout(0.2))
+    model.add(Dense(units=1))  # Output layer for regression
     model.compile(optimizer='adam', loss='mean_squared_error')
     return model
 
-def enter_trades_based_on_nn(df, model, scaler, loss_threshold=0.0001):
-    df = create_features(df)
-    X = df[['lag_1', 'lag_2', 'moving_avg_3', 'moving_avg_5', 'volatility', 'momentum']]
-    X_scaled = scaler.transform(X)
+def prepare_data(df, feature_col, target_col, time_steps=60):
+    data = df[[feature_col, target_col]].values
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_data = scaler.fit_transform(data)
 
-    # Predict the next price
-    next_price_prediction = model.predict(X_scaled[-1].reshape(1, -1))
+    X, y = [], []
+    for i in range(time_steps, len(scaled_data)):
+        X.append(scaled_data[i-time_steps:i, 0])
+        y.append(scaled_data[i, 1])
+    X, y = np.array(X), np.array(y)
+    X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+    return X, y, scaler
 
-    # Enter trade based on prediction
-    entry_price = df['Close'].iloc[-1]
-    if next_price_prediction > entry_price and test_loss < loss_threshold:
-        print("Enter Long Trade")
-    elif next_price_prediction < entry_price and test_loss < loss_threshold:
-        print("Enter Short Trade")
-    else:
-        print("Model loss too high or prediction not favorable, no trade entered.")
+def create_features_with_indicators(df):
+    df['lag_1'] = df['Close'].shift(1)
+    df['lag_2'] = df['Close'].shift(2)
+    df['moving_avg_3'] = df['Close'].rolling(window=3).mean()
+    df['moving_avg_5'] = df['Close'].rolling(window=5).mean()
+    df['volatility'] = df['Close'].rolling(window=5).std()
+    df['momentum'] = df['Close'] - df['Close'].shift(3)
+    
+    # Add technical indicators
+    df['RSI'] = talib.RSI(df['Close'], timeperiod=14)
+    df['MACD'], df['MACD_signal'], _ = talib.MACD(df['Close'], fastperiod=12, slowperiod=26, signalperiod=9)
+    df['BB_upper'], df['BB_middle'], df['BB_lower'] = talib.BBANDS(df['Close'], timeperiod=20)
+    
+    df.dropna(inplace=True)
+    return df
 
 def main():
     print("Fetching GBP/USD data for the last year at 1-hour intervals...")
