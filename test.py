@@ -1,16 +1,41 @@
-class Solution:
-    def calculateScore(self, s: str) -> int:
-        myarr = [[] for _ in range(26)]
-        point = 0
-        for idx, char in enumerate(s):
-            mirror_index = 219 - ord(char) - 97  # Calculate the mirror index
-            if myarr[mirror_index]:
-                point += idx - myarr[mirror_index].pop()
+def max_profit(coins):
+    m, n = len(coins), len(coins[0])
+    max_coins = float('-inf')
+    
+    def dfs(i, j, neutralizations, current_coins):
+        nonlocal max_coins
+        
+        if i == m-1 and j == n-1:
+            max_coins = max(max_coins, current_coins)
+            return
+        
+        if i >= m or j >= n:
+            return
+        
+        if j + 1 < n:
+            next_val = coins[i][j+1]
+            if next_val >= 0:
+                dfs(i, j+1, neutralizations, current_coins + next_val)
             else:
-                myarr[ord(char) - 97].append(idx)  # Correct the append method
-        return point
+                dfs(i, j+1, neutralizations, current_coins + next_val)
+                if neutralizations > 0:
+                    dfs(i, j+1, neutralizations-1, current_coins + abs(next_val))
+        
+        if i + 1 < m:
+            next_val = coins[i+1][j]
+            if next_val >= 0:
+                dfs(i+1, j, neutralizations, current_coins + next_val)
+            else:
+                dfs(i+1, j, neutralizations, current_coins + next_val)
+                if neutralizations > 0:
+                    dfs(i+1, j, neutralizations-1, current_coins + abs(next_val))
+    
+    initial = coins[0][0]
+    dfs(0, 0, 2, initial)
+    return max_coins
 
-# Example usage
-solution = Solution()
-s = "aczzx"
-print(solution.calculateScore(s))  # Expected Output: 18
+coins1 = [[0,1,-1],[1,-2,3],[2,-3,4]]
+print(max_profit(coins1))
+
+coins2 = [[10,10,10],[10,10,10]]
+print(max_profit(coins2))

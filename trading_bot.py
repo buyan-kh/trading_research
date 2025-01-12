@@ -1,208 +1,128 @@
-import yfinance as yf
-import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import xgboost as xgb
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+import talib
 
-def get_gbpusd_data(period="1mo", interval="1h"):
-    """Get GBP/USD historical data from Yahoo Finance"""
-    ticker = yf.Ticker("GBPUSD=X")
-    df = ticker.history(period=period, interval=interval)
-    return df
-
-def identify_all_points(df, window=5):
-    """Identify swing points and between points"""
-    # Initialize all point types
-    df['swing_high'] = False
-    df['swing_low'] = False
-    df['between_high'] = False
-    df['between_low'] = False
-    
-    # First identify swing points
-    for i in range(window, len(df) - window):
-        current_high = df['High'].iloc[i]
-        current_low = df['Low'].iloc[i]
+class TradingBot:
+    def __init__(self):
+        self.rf_model = RandomForestClassifier()
+        self.gb_model = GradientBoostingClassifier()
+        self.xgb_model = xgb.XGBClassifier()
+        self.lstm_model = None
+        self.scaler = StandardScaler()
         
-        # Check surrounding bars
-        left_bars = df.iloc[i-window:i]
-        right_bars = df.iloc[i+1:i+window+1]
+    def create_features(self, df):
+        df['RSI'] = talib.RSI(df['close'])
+        df['MACD'], df['MACD_signal'], _ = talib.MACD(df['close'])
+        df['BB_upper'], df['BB_middle'], df['BB_lower'] = talib.BBANDS(df['close'])
+        df['ATR'] = talib.ATR(df['high'], df['low'], df['close'])
+        df['OBV'] = talib.OBV(df['close'], df['volume'])
         
-        # Swing high
-        if (current_high > left_bars['High'].max() and 
-            current_high > right_bars['High'].max()):
-            df.loc[df.index[i], 'swing_high'] = True
+        df['returns'] = df['close'].pct_change()
+        df['volatility'] = df['returns'].rolling(window=20).std()
         
-        # Swing low
-        if (current_low < left_bars['Low'].min() and 
-            current_low < right_bars['Low'].min()):
-            df.loc[df.index[i], 'swing_low'] = True
-    
-    # Now identify between points
-    for i in range(window, len(df) - window):
-        # Find between high points (highest point between two swing lows)
-        if i > 0 and i < len(df) - 1:
-            prev_sl_idx = df[:i][df['swing_low']].index[-1] if any(df[:i]['swing_low']) else None
-            next_sl_idx = df[i:][df['swing_low']].index[0] if any(df[i:]['swing_low']) else None
-            
-            if prev_sl_idx is not None and next_sl_idx is not None:
-                current_section = df.loc[prev_sl_idx:next_sl_idx]
-                if df['High'].iloc[i] == current_section['High'].max():
-                    df.loc[df.index[i], 'between_high'] = True
+        for window in [7, 14, 21]:
+            df[f'MA_{window}'] = df['close'].rolling(window=window).mean()
+            df[f'std_{window}'] = df['close'].rolling(window=window).std()
         
-        # Find between low points (lowest point between two swing highs)
-        if i > 0 and i < len(df) - 1:
-            prev_sh_idx = df[:i][df['swing_high']].index[-1] if any(df[:i]['swing_high']) else None
-            next_sh_idx = df[i:][df['swing_high']].index[0] if any(df[i:]['swing_high']) else None
-            
-            if prev_sh_idx is not None and next_sh_idx is not None:
-                current_section = df.loc[prev_sh_idx:next_sh_idx]
-                if df['Low'].iloc[i] == current_section['Low'].min():
-                    df.loc[df.index[i], 'between_low'] = True
-
-    return df
-
-def price_to_pips(price_diff):
-    """Convert price difference to pips"""
-    return round(price_diff * 10000)
-
-def analyze_between_points(df):
-    """Analyze pip differences between points and add annotations"""
-    # Get between points with their prices
-    between_highs = df[df['between_high']][['High']]
-    between_lows = df[df['between_low']][['Low']]
+        return df
     
-    # Store annotations for plotting
-    annotations = []
-    high_diffs = []
-    low_diffs = []
+    def create_lstm_model(self, input_shape):
+        model = Sequential([
+            LSTM(100, return_sequences=True, input_shape=input_shape),
+            Dropout(0.2),
+            LSTM(50, return_sequences=False),
+            Dropout(0.2),
+            Dense(25),
+            Dense(1, activation='sigmoid')
+        ])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        return model
     
-    # Calculate pip differences for between highs
-    for i in range(1, len(between_highs)):
-        current_price = between_highs['High'].iloc[i]
-        prev_price = between_highs['High'].iloc[i-1]
-        price_diff = abs(current_price - prev_price)
-        pips = price_to_pips(price_diff)
+    def prepare_data(self, df):
+        features = self.create_features(df)
+        features = features.dropna()
         
-        high_diffs.append({
-            'start_date': between_highs.index[i-1],
-            'end_date': between_highs.index[i],
-            'pips': pips
-        })
+        X = features[['RSI', 'MACD', 'BB_upper', 'BB_lower', 'ATR', 'OBV', 
+                     'volatility', 'MA_7', 'MA_14', 'MA_21']]
+        y = (features['close'].shift(-1) > features['close']).astype(int)[:-1]
         
-        # Create annotation for chart
-        mid_point = between_highs.index[i-1] + (between_highs.index[i] - between_highs.index[i-1])/2
-        annotations.append(dict(
-            x=mid_point,
-            y=max(current_price, prev_price),
-            text=f"{pips}p",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=2,
-            arrowcolor='orange',
-            font=dict(size=10, color='orange'),
-            ax=0,
-            ay=-40
-        ))
+        return X[:-1], y
     
-    # Calculate pip differences for between lows
-    for i in range(1, len(between_lows)):
-        current_price = between_lows['Low'].iloc[i]
-        prev_price = between_lows['Low'].iloc[i-1]
-        price_diff = abs(current_price - prev_price)
-        pips = price_to_pips(price_diff)
+    def train_models(self, df):
+        X, y = self.prepare_data(df)
+        X_scaled = self.scaler.fit_transform(X)
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2)
         
-        low_diffs.append({
-            'start_date': between_lows.index[i-1],
-            'end_date': between_lows.index[i],
-            'pips': pips
-        })
+        # Train traditional ML models
+        self.rf_model.fit(X_train, y_train)
+        self.gb_model.fit(X_train, y_train)
+        self.xgb_model.fit(X_train, y_train)
         
-        # Create annotation for chart
-        mid_point = between_lows.index[i-1] + (between_lows.index[i] - between_lows.index[i-1])/2
-        annotations.append(dict(
-            x=mid_point,
-            y=min(current_price, prev_price),
-            text=f"{pips}p",
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=2,
-            arrowcolor='blue',
-            font=dict(size=10, color='blue'),
-            ax=0,
-            ay=40
-        ))
+        # Prepare and train LSTM
+        X_lstm = X_scaled.reshape((X_scaled.shape[0], 1, X_scaled.shape[1]))
+        self.lstm_model = self.create_lstm_model((1, X_scaled.shape[1]))
+        self.lstm_model.fit(X_lstm, y, epochs=50, batch_size=32, validation_split=0.2)
+        
+    def predict(self, current_data):
+        features = self.create_features(current_data)
+        X = features[['RSI', 'MACD', 'BB_upper', 'BB_lower', 'ATR', 'OBV', 
+                     'volatility', 'MA_7', 'MA_14', 'MA_21']].iloc[-1:]
+        X_scaled = self.scaler.transform(X)
+        
+        # Get predictions from all models
+        rf_pred = self.rf_model.predict_proba(X_scaled)[0][1]
+        gb_pred = self.gb_model.predict_proba(X_scaled)[0][1]
+        xgb_pred = self.xgb_model.predict_proba(X_scaled)[0][1]
+        lstm_pred = self.lstm_model.predict(X_scaled.reshape(1, 1, -1))[0][0]
+        
+        # Ensemble prediction
+        ensemble_pred = np.mean([rf_pred, gb_pred, xgb_pred, lstm_pred])
+        
+        return {
+            'ensemble_prediction': ensemble_pred,
+            'individual_predictions': {
+                'random_forest': rf_pred,
+                'gradient_boosting': gb_pred,
+                'xgboost': xgb_pred,
+                'lstm': lstm_pred
+            }
+        }
     
-    return annotations, high_diffs, low_diffs
-
-def plot_chart(df):
-    """Create an interactive plot with all points and pip differences"""
-    # Get annotations for pip differences
-    annotations, high_diffs, low_diffs = analyze_between_points(df)
+    def calculate_position_size(self, confidence, account_balance, risk_per_trade=0.02):
+        return account_balance * risk_per_trade * confidence
     
-    fig = go.Figure(data=[go.Candlestick(x=df.index,
-                open=df['Open'],
-                high=df['High'],
-                low=df['Low'],
-                close=df['Close'],
-                name='GBP/USD')])
+    def generate_signals(self, current_data, account_balance):
+        predictions = self.predict(current_data)
+        confidence = predictions['ensemble_prediction']
+        
+        # Generate trading signal
+        if confidence > 0.7:
+            position_size = self.calculate_position_size(confidence, account_balance)
+            return {'action': 'BUY', 'size': position_size, 'confidence': confidence}
+        elif confidence < 0.3:
+            position_size = self.calculate_position_size(1 - confidence, account_balance)
+            return {'action': 'SELL', 'size': position_size, 'confidence': 1 - confidence}
+        else:
+            return {'action': 'HOLD', 'size': 0, 'confidence': confidence}
 
-    # Add swing highs (red)
-    swing_highs = df[df['swing_high']]
-    fig.add_scatter(
-        x=swing_highs.index,
-        y=swing_highs['High'],
-        mode='markers',
-        marker=dict(symbol='triangle-down', size=10, color='red'),
-        name='Swing Highs'
-    )
-    
-    # Add swing lows (green)
-    swing_lows = df[df['swing_low']]
-    fig.add_scatter(
-        x=swing_lows.index,
-        y=swing_lows['Low'],
-        mode='markers',
-        marker=dict(symbol='triangle-up', size=10, color='green'),
-        name='Swing Lows'
-    )
-    
-    # Add between highs (orange)
-    between_highs = df[df['between_high']]
-    fig.add_scatter(
-        x=between_highs.index,
-        y=between_highs['High'],
-        mode='markers',
-        marker=dict(symbol='triangle-down', size=8, color='orange'),
-        name='Between Highs'
-    )
-    
-    # Add between lows (blue)
-    between_lows = df[df['between_low']]
-    fig.add_scatter(
-        x=between_lows.index,
-        y=between_lows['Low'],
-        mode='markers',
-        marker=dict(symbol='triangle-up', size=8, color='blue'),
-        name='Between Lows'
-    )
-
-    # Add pip difference annotations
-    fig.update_layout(
-        annotations=annotations,
-        title='GBP/USD Price Action with Pip Differences',
-        yaxis_title='Price (USD)',
-        xaxis_title='Date',
-        template='plotly_dark'
-    )
-
-    fig.show()
-
-def main():
-    print("Fetching GBP/USD data...")
-    df = get_gbpusd_data()
-    df = identify_all_points(df)
-    plot_chart(df)
-
+# Example usage
 if __name__ == "__main__":
-    main() 
+    # Sample data loading (replace with your data source)
+    df = pd.read_csv('your_price_data.csv')
+    
+    bot = TradingBot()
+    bot.train_models(df)
+    
+    # Get current market data
+    current_data = df.tail(100)  # Replace with real-time data
+    account_balance = 10000
+    
+    # Generate trading signals
+    signals = bot.generate_signals(current_data, account_balance)
+    print(f"Trading Signal: {signals}") 
