@@ -26,12 +26,28 @@ class ModelTrainer:
         print(f'Accuracy: {accuracy:.2f}')
         print(f'Best Parameters: {grid_search.best_params_}')
 
-    def backtest(self, transaction_cost=0.001):
+    def backtest(self, transaction_cost=0.001, stop_loss=0.02, take_profit=0.05):
         self.data['Prediction'] = self.model.predict(self.X)
         self.data['Strategy_Return'] = self.data['Return'] * self.data['Prediction'].shift(1)
         self.data['Strategy_Return'] -= transaction_cost * np.abs(self.data['Prediction'].diff())
+
+        # Implement stop-loss and take-profit
+        self.data['Strategy_Return'] = np.where(self.data['Return'] < -stop_loss, -stop_loss, self.data['Strategy_Return'])
+        self.data['Strategy_Return'] = np.where(self.data['Return'] > take_profit, take_profit, self.data['Strategy_Return'])
+
         self.data['Cumulative_Market_Return'] = (1 + self.data['Return']).cumprod()
         self.data['Cumulative_Strategy_Return'] = (1 + self.data['Strategy_Return']).cumprod()
+
+    def calculate_sharpe_ratio(self):
+        excess_return = self.data['Strategy_Return'] - 0.0001  # Assuming a risk-free rate of 0.01% per day
+        sharpe_ratio = np.sqrt(252) * excess_return.mean() / excess_return.std()
+        print(f'Sharpe Ratio: {sharpe_ratio:.2f}')
+
+    def calculate_drawdown(self):
+        cum_return = self.data['Cumulative_Strategy_Return']
+        drawdown = cum_return / cum_return.cummax() - 1
+        max_drawdown = drawdown.min()
+        print(f'Max Drawdown: {max_drawdown:.2%}')
 
     def plot_results(self):
         plt.figure(figsize=(12, 6))
