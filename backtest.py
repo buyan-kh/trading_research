@@ -8,6 +8,10 @@ from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 import talib
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+from data_handler import load_data, feature_engineering
 
 def identify_trade_signals(df):
     """Identify long trade signals based on previous lower high"""
@@ -324,3 +328,44 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Load and prepare data
+data = load_data()
+data = feature_engineering(data)
+
+# Create target variable
+data['Target'] = np.where(data['Return'].shift(-1) > 0, 1, 0)
+
+# Features and target
+features = ['SMA_10', 'SMA_50', 'RSI']
+X = data[features]
+y = data['Target']
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Model training
+model = RandomForestClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+
+# Predictions
+y_pred = model.predict(X_test)
+
+# Evaluation
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Accuracy: {accuracy:.2f}')
+
+# Backtesting
+data['Prediction'] = model.predict(X)
+data['Strategy_Return'] = data['Return'] * data['Prediction'].shift(1)
+
+# Calculate cumulative returns
+data['Cumulative_Market_Return'] = (1 + data['Return']).cumprod()
+data['Cumulative_Strategy_Return'] = (1 + data['Strategy_Return']).cumprod()
+
+# Plot results
+plt.figure(figsize=(12, 6))
+plt.plot(data['Cumulative_Market_Return'], label='Market Return')
+plt.plot(data['Cumulative_Strategy_Return'], label='Strategy Return')
+plt.legend()
+plt.show()
