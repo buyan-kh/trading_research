@@ -1,14 +1,21 @@
 import pandas as pd
 import yfinance as yf
 
-def load_data(ticker='XAUUSD=X', start='2020-01-01', end='2023-01-01', interval='1d'):
-    data = yf.download(ticker, start=start, end=end, interval=interval)
-    data['Return'] = data['Close'].pct_change()
-    return data
+class DataHandler:
+    def __init__(self, ticker='XAUUSD=X', start='2020-01-01', end='2023-01-01', interval='1d'):
+        self.ticker = ticker
+        self.start = start
+        self.end = end
+        self.interval = interval
+        self.data = None
 
-def feature_engineering(data):
-    data['SMA_10'] = data['Close'].rolling(window=10).mean()
-    data['SMA_50'] = data['Close'].rolling(window=50).mean()
-    data['RSI'] = 100 - (100 / (1 + data['Return'].rolling(window=14).mean() / data['Return'].rolling(window=14).std()))
-    data.dropna(inplace=True)
-    return data 
+    def load_data(self):
+        self.data = yf.download(self.ticker, start=self.start, end=self.end, interval=self.interval)
+        self.data['Return'] = self.data['Close'].pct_change()
+
+    def feature_engineering(self):
+        self.data['SMA_10'] = self.data['Close'].rolling(window=10).mean()
+        self.data['SMA_50'] = self.data['Close'].rolling(window=50).mean()
+        self.data['RSI'] = 100 - (100 / (1 + self.data['Return'].rolling(window=14).mean() / self.data['Return'].rolling(window=14).std()))
+        self.data.dropna(inplace=True)
+        return self.data 
