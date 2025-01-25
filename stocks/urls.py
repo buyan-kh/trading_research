@@ -2,5 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.stock_view, name='stock_view'),
+    path('', views.index, name='index'),  # Adjust according to your views
+    # Add other paths as necessary
 ] 
