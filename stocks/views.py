@@ -13,3 +13,6 @@ def stock_view(request):
         'chart': chart,
     }
     return render(request, 'stocks/stock_view.html', context)
+
+def index(request):
+    return render(request, 'stocks/stock_view.html', {'ticker': 'AAPL', 'data': '', 'chart': ''})
