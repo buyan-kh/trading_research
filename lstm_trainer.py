@@ -31,4 +31,5 @@ class LSTMTrainer:
         self.model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)
 
     def predict(self, X_test):
-        return self.model.predict(X_test) 
+        return self.model.predict(X_test)
+        #
