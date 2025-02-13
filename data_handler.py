@@ -15,6 +15,10 @@ class DataHandler:
         self.data['Return'] = self.data['Close'].pct_change()
 
     def feature_engineering(self):
+        # Check if 'Volume' column exists before calculating OBV
+        if 'Volume' not in self.data.columns:
+            self.data['Volume'] = 0  # or handle appropriately
+
         self.data['SMA_10'] = self.data['Close'].rolling(window=10).mean()
         self.data['SMA_50'] = self.data['Close'].rolling(window=50).mean()
         self.data['RSI'] = talib.RSI(self.data['Close'], timeperiod=14)

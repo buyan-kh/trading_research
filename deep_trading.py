@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pdc
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Conv1D, Input, concatenate

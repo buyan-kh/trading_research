@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 class ModelTrainer:
     def __init__(self, data):
         self.data = data
-        self.features = ['SMA_10', 'SMA_50', 'RSI', 'MACD', 'BB_upper', 'BB_middle', 'BB_lower', 'OBV']
+        self.features = [col for col in ['SMA_10', 'SMA_50', 'RSI', 'MACD', 'BB_upper', 'BB_middle', 'BB_lower', 'OBV'] if col in self.data.columns]
         self.X = self.data[self.features]
         self.y = np.where(self.data['Return'].shift(-1) > 0, 1, 0)
 

@@ -34,7 +34,7 @@ def train_lstm_model(data):
 
     # Create and train the model
     model = create_lstm_model((x_train.shape[1], 1))
-    model.fit(x_train, y_train, batch_size=1, epochs=1)
+    model.fit(x_train, y_train, batch_size=1, epochs=10)
 
     return model, scaler
 
