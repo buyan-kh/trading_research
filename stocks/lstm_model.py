@@ -15,6 +15,9 @@ def create_lstm_model(input_shape):
     return model
 
 def train_lstm_model(data):
+    if len(data) < 60:
+        raise ValueError("Not enough data to train the model. At least 60 data points are required.")
+    
     # Prepare the data
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(data['Close'].values.reshape(-1, 1))
@@ -34,7 +37,7 @@ def train_lstm_model(data):
 
     # Create and train the model
     model = create_lstm_model((x_train.shape[1], 1))
-    model.fit(x_train, y_train, batch_size=1, epochs=10)
+    model.fit(x_train, y_train, batch_size=1, epochs=1)
 
     return model, scaler
 
