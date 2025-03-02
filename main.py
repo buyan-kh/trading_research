@@ -27,6 +27,9 @@ def main():
     trading_api = TradingAPI(api_key='your_api_key', api_secret='your_api_secret')
     trading_api.connect()
     trading_api.get_account_balance()
+    trading_api = TradingAPI(api_key='your_api_key', api_secret='your_api_secret')
 
 if __name__ == "__main__":
     main() 
+if __name__ == "__main__":
+    main()

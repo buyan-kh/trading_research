@@ -6,7 +6,13 @@ def stock_view(request):
     ticker = request.GET.get('ticker', 'AAPL')
     period = request.GET.get('period', '1mo')
     interval = request.GET.get('interval', '1d')
+    
+    # Fetch stock data
     data = fetch_stock_data(ticker, period, interval)
+    
+    if data.empty:
+        return render(request, 'stocks/stock_view.html', {'error': 'No data found for the given ticker.'})
+
     chart = create_candlestick_chart(data)
 
     # Train LSTM model and make predictions

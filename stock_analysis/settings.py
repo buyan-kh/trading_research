@@ -1,3 +1,7 @@
+import os
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 INSTALLED_APPS = [
     # ...
     'stocks',  # Ensure your app is listed here
@@ -16,17 +20,19 @@ DATABASES = {
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [os.path.join(BASE_DIR, 'stocks/templates')],  # Ensure this path is correct
+        'DIRS': [os.path.join(BASE_DIR, 'stocks/templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
-                # ...
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
 ]
 
+# Static files settings
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'stocks/static'),  # Adjust as necessary
-] 
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'stocks/static')] 
