@@ -18,9 +18,14 @@ def create_candlestick_chart(data):
     return fig.to_html(full_html=False)
 
 def fetch_stock_data(ticker, period, interval):
-    # Placeholder for fetching stock data
-    # Replace with actual data fetching logic
-    return pd.DataFrame()  # Return an empty DataFrame for now
+    try:
+        data = yf.download(ticker, period=period, interval=interval)
+        if data.empty:
+            raise ValueError("No data found for the given ticker.")
+        return data
+    except Exception as e:
+        print(f"Error fetching data: {e}")
+        return pd.DataFrame()  # Return an empty DataFrame on error
 
 def create_candlestick_chart(data):
     # Placeholder for creating a candlestick chart
