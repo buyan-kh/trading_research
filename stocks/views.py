@@ -16,9 +16,12 @@ def stock_view(request):
     chart = create_candlestick_chart(data)
 
     # Train LSTM model and make predictions
-    model, scaler = train_lstm_model(data)
-    last_60_days = data['Close'][-60:].values.reshape(-1, 1)
-    predicted_price = predict_next_price(model, scaler, last_60_days)
+    try:
+        model, scaler = train_lstm_model(data)
+        last_60_days = data['Close'][-60:].values.reshape(-1, 1)
+        predicted_price = predict_next_price(model, scaler, last_60_days)
+    except ValueError as e:
+        return render(request, 'stocks/stock_view.html', {'error': str(e)})
 
     context = {
         'ticker': ticker,
