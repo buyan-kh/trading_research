@@ -109,7 +109,7 @@ def backtest_trades(df, trade_signals, initial_balance=10000, lot_size=1):
     return results
 
 def calculate_fibonacci_levels(df, period=50):
-    """Calculate Fibonacci retracement levels based on the highest and lowest prices over a specified period."""
+    """Calculate Fibonacci retracement levels based on the highest and lowest prices over a specified period"""
     if len(df) < period:
         raise ValueError("DataFrame must have at least 'period' rows.")
     
