@@ -138,6 +138,7 @@ def count_cycles(df, interval='4H'):
     df['Cycle'] = (df.index.to_series().diff() > pd.Timedelta(interval)).cumsum()
     cycle_counts = df['Cycle'].value_counts().sort_index()
     return cycle_counts
+    ""
 
 def analyze_retracements(df):
     """Analyze retracements based on Fibonacci levels"""
