@@ -21,9 +21,12 @@ class DataHandler:
 
         self.data['SMA_10'] = self.data['Close'].rolling(window=10).mean()
         self.data['SMA_50'] = self.data['Close'].rolling(window=50).mean()
-        self.data['RSI'] = talib.RSI(self.data['Close'], timeperiod=14)
-        self.data['MACD'], self.data['MACD_signal'], _ = talib.MACD(self.data['Close'])
-        self.data['BB_upper'], self.data['BB_middle'], self.data['BB_lower'] = talib.BBANDS(self.data['Close'])
-        self.data['OBV'] = talib.OBV(self.data['Close'], self.data['Volume'])
+        close_prices = self.data['Close'].values.astype(float)
+        volume_values = self.data['Volume'].values.astype(float)
+        
+        self.data['RSI'] = talib.RSI(close_prices, timeperiod=14)
+        self.data['MACD'], self.data['MACD_signal'], _ = talib.MACD(close_prices)
+        self.data['BB_upper'], self.data['BB_middle'], self.data['BB_lower'] = talib.BBANDS(close_prices)
+        self.data['OBV'] = talib.OBV(close_prices, volume_values)
         self.data.dropna(inplace=True)
         return self.data 
