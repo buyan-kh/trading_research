@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ ticker }} - Advanced Stock Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .price-positive { color: #28a745; }
+        .price-negative { color: #dc3545; }
+        .signal-buy { background-color: #d4edda; border-left: 4px solid #28a745; }
+        .signal-sell { background-color: #f8d7da; border-left: 4px solid #dc3545; }
+        .metric-card { transition: transform 0.2s; }
+        .metric-card:hover { transform: translateY(-2px); }
+        .chart-container { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/"><i class="fas fa-chart-line"></i> Trading Bot</a>
+            <div class="d-flex">
+                <a href="/portfolio" class="btn btn-outline-light me-2">Portfolio</a>
+                <a href="/api/stock?ticker={{ ticker }}" class="btn btn-outline-light">API</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        {% if error %}
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+            </div>
+        {% else %}
+            <!-- Stock Header -->
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <h1 class="display-4">{{ ticker }}</h1>
+                    <div class="d-flex align-items-center">
+                        <span class="h2 me-3">${{ current_price }}</span>
+                        <span class="h5 {% if price_change >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                            {% if price_change >= 0 %}+{% endif %}${{ price_change }} ({{ price_change_pct|floatformat:2 }}%)
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <form method="get" class="card p-3">
+                        <div class="mb-2">
+                            <label for="ticker" class="form-label">Ticker Symbol:</label>
+                            <input type="text" id="ticker" name="ticker" value="{{ ticker }}" 
+                                   class="form-control" placeholder="e.g., AAPL">
+                        </div>
+                        <div class="mb-2">
+                            <label for="period" class="form-label">Time Period:</label>
+                            <select id="period" name="period" class="form-select">
+                                <option value="1mo" {% if period == '1mo' %}selected{% endif %}>1 Month</option>
+                                <option value="3mo" {% if period == '3mo' %}selected{% endif %}>3 Months</option>
+                                <option value="6mo" {% if period == '6mo' %}selected{% endif %}>6 Months</option>
+                                <option value="1y" {% if period == '1y' %}selected{% endif %}>1 Year</option>
+                                <option value="2y" {% if period == '2y' %}selected{% endif %}>2 Years</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Analyze
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="row mb-4">
+                {% if portfolio_metrics %}
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Total Return</h6>
+                            <h4 class="{% if portfolio_metrics.total_return >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                {{ portfolio_metrics.total_return }}%
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Volatility</h6>
+                            <h4>{{ portfolio_metrics.volatility }}%</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Sharpe Ratio</h6>
+                            <h4>{{ portfolio_metrics.sharpe_ratio }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Max Drawdown</h6>
+                            <h4 class="price-negative">{{ portfolio_metrics.max_drawdown }}%</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Win Rate</h6>
+                            <h4>{{ portfolio_metrics.win_rate }}%</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="card metric-card h-100">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Final Value</h6>
+                            <h4 class="price-positive">${{ portfolio_metrics.final_value }}</h4>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Analysis & Signals -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    {% if analysis %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-area"></i> Technical Analysis</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Trend:</strong> {{ analysis.trend|default:"N/A" }}
+                                </div>
+                                <div class="col-6">
+                                    <strong>RSI Signal:</strong> {{ analysis.rsi_signal|default:"N/A" }}
+                                    {% if analysis.rsi_value %}({{ analysis.rsi_value|floatformat:1 }}){% endif %}
+                                </div>
+                                <div class="col-6">
+                                    <strong>BB Position:</strong> {{ analysis.bb_signal|default:"N/A" }}
+                                </div>
+                                <div class="col-6">
+                                    <strong>Volume:</strong> {{ analysis.volume_signal|default:"N/A" }}
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <strong>Volatility:</strong> {{ analysis.volatility|default:"N/A" }} 
+                                    ({{ analysis.volatility_signal|default:"N/A" }})
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-signal"></i> Trading Signals</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if signals %}
+                                {% for signal in signals %}
+                                <div class="alert {% if signal.type == 'BUY' %}signal-buy{% else %}signal-sell{% endif %} py-2 mb-2">
+                                    <strong>{{ signal.type }}</strong> - {{ signal.indicator }}: {{ signal.reason }}
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">No trading signals generated.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Prediction -->
+            {% if predicted_price %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-brain"></i> AI Price Prediction</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <h4>Next Day Predicted Price: <span class="text-primary">${{ predicted_price }}</span></h4>
+                                    {% with change=predicted_price|floatformat:2|add:"-"|add:current_price|floatformat:2 %}
+                                    <p>Expected change: 
+                                        <span class="{% if change >= 0 %}price-positive{% else %}price-negative{% endif %}">
+                                            {% if change >= 0 %}+{% endif %}{{ change }}
+                                        </span>
+                                    </p>
+                                    {% endwith %}
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle"></i> 
+                                        Prediction based on LSTM neural network trained on historical price and volume data.
+                                        This is for educational purposes only and should not be used for actual trading decisions.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Price Chart -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="chart-container">
+                        <h5><i class="fas fa-chart-candlestick"></i> Technical Chart</h5>
+                        {{ chart|safe }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-table"></i> Recent Price Data</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                {{ data_table|safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <footer class="bg-dark text-light py-3 mt-5">
+        <div class="container text-center">
+            <p>&copy; 2024 Trading Bot - Advanced Stock Analysis Platform</p>
+            <p><small>Disclaimer: This tool is for educational purposes only. Past performance does not guarantee future results.</small></p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
