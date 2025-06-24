@@ -3,7 +3,7 @@ import yfinance as yf
 import talib
 
 class DataHandler:
-    def __init__(self, ticker='XAUUSD=X', start='2020-01-01', end='2023-01-01', interval='1d'):
+    def __init__(self, ticker='AAPL', start='2020-01-01', end='2023-01-01', interval='1d'):
         self.ticker = ticker
         self.start = start
         self.end = end

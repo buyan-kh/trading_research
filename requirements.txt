@@ -6,6 +6,6 @@
   yfinance
   plotly
   matplotlib
-  talib
+  TA-Lib
   xgboost
   django
